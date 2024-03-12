@@ -10,12 +10,12 @@
      log.info """
       Usage:
       The typical command for running the pipeline is as follows:
-      nextflow run main.nf --query QUERY.fasta --genome GENOME.fasta -profile local
+      nextflow run main.nf --query QUERY.fasta --reference reference.fasta -profile local
       nextflow run main.nf --query QUERY.fasta --dbDir "blastDatabaseDirectory" --dbName "blastPrefixName" -profile local
 
       Mandatory arguments:
        --query                        Query fasta file of sequences you wish to BLAST
-       --genome                       Genome from which BLAST databases will be generated
+       --reference                    Reference from which BLAST databases will be generated
        or
        --query                        Query fasta file of sequences you wish to BLAST
        --dbDir                        BLAST database directory (full path required)
@@ -71,10 +71,10 @@ process software_check {
 
 
 
-if (params.genome) {
+if (params.reference) {
 
-  genomefile = Channel
-                .fromPath(params.genome)
+  referencefile = Channel
+                .fromPath(params.reference)
                 .map { file -> tuple(file.simpleName, file.parent, file) } //requires the file part of this tuple for some reason even though I don't use it downstream
 
   process runMakeBlastDB {
@@ -83,17 +83,17 @@ if (params.genome) {
   //  publishDir "${params.outdir}", mode: 'copy', pattern: '$name'
 
     input:
-    set val(name), path(dbDir), file(FILE) from genomefile
+    set val(name), path(dbDir), file(FILE) from referencefile
 
     output:
-    // val params.genome.take(params.genome.lastIndexOf('.')) into dbName_ch
+    // val params.reference.take(params.reference.lastIndexOf('.')) into dbName_ch
     val name into dbName_ch
     path dbDir into dbDir_ch
 
     script:
     """
-    makeblastdb -in ${params.genome} -dbtype 'nucl' -out $dbDir/$name
-    # makeblastdb -in ${params.genome} -dbtype 'prot' -out $dbDir/$name
+    makeblastdb -in ${params.reference} -dbtype 'nucl' -out $dbDir/$name
+    # makeblastdb -in ${params.reference} -dbtype 'prot' -out $dbDir/$name
 
     """
 
@@ -108,17 +108,17 @@ process runBlast {
 
   input:
   path query from Query_chunks
-//  val flag from done_ch
-path dbDir from dbDir_ch.val
-val dbName from dbName_ch.val
+  //  val flag from done_ch
+  path dbDir from dbDir_ch.val
+  val dbName from dbName_ch.val
 
   output:
   path params.outfileName into blast_output
 
   script:
   """
-  echo "${params.app}  -num_threads ${params.threads} -db $dbDir/$dbName -query $query -outfmt $params.outfmt $params.options -out $params.outfileName" > blast.log
-  ${params.app}  -num_threads ${params.threads} -db $dbDir/$dbName -query $query -outfmt $params.outfmt $params.options -out $params.outfileName
+  echo "${params.app}  -num_threads ${task.cpus} -db $dbDir/$dbName -query $query -outfmt $params.outfmt $params.options -out $params.outfileName" > blast.log
+  ${params.app}  -num_threads ${task.cpus} -db $dbDir/$dbName -query $query -outfmt $params.outfmt $params.options -out $params.outfileName
 
   """
 
